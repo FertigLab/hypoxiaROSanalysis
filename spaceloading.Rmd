@@ -1,0 +1,53 @@
+---
+title: "spaceloading"
+author: "Jeanette Johnson"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+```
+
+```{r load space info into seurat}
+spd_897 <- Load10X_Spatial("/data/outs/")
+spd_899 <- Load10X_Spatial("/data/outs899/")
+spd_897
+spd_899
+```
+
+```{r first vis}
+plot1 <- VlnPlot(spd_897, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("897 feature count")
+plot2 <- SpatialFeaturePlot(spd_897, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("897 spatial features")
+wrap_plots(plot1, plot2)
+
+plot3 <- VlnPlot(spd_899, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("899 feature count")
+plot4 <- SpatialFeaturePlot(spd_899, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 spatial features")
+wrap_plots(plot3, plot4)
+```
+
+```{r }
+p1 <- SpatialFeaturePlot(spd_897, features = "HIF1A", pt.size.factor = 1)
+p2 <- SpatialFeaturePlot(spd_899, features = "HIF1A", alpha = c(0.1, 1))
+p1 + p2
+
+
+tumor897 <-anndata::read_h5ad('/results/adata897.h5ad')
+spd_897[["pattern1"]] <-tumor897$obs$Pattern1
+spd_897[["pattern2"]] <-tumor897$obs$Pattern2
+spd_897[["pattern3"]] <-tumor897$obs$Pattern3
+spd_897[["pattern4"]] <-tumor897$obs$Pattern4
+p1 <- SpatialFeaturePlot(spd_897, features = c("pattern1","pattern2", "pattern3", "pattern4"))
+
+tumor899 <-anndata::read_h5ad('/results/adata899.h5ad')
+spd_899[["pattern1"]] <-tumor899$obs$Pattern1
+spd_899[["pattern2"]] <-tumor899$obs$Pattern2
+spd_899[["pattern3"]] <-tumor899$obs$Pattern3
+spd_899[["pattern4"]] <-tumor899$obs$Pattern4
+p2 <- SpatialFeaturePlot(spd_899, features = c("pattern1","pattern2", "pattern3", "pattern4"))
+```
