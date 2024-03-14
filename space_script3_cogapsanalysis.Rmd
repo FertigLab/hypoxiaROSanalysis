@@ -1,0 +1,101 @@
+---
+title: "spaceloading"
+author: "Jeanette Johnson and Michael Considine"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(SeuratObject)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+
+```
+
+
+# Following running CoGAPS, we load the patterns and plot them 
+
+
+```{r }
+cogapsresult897=readRDS("cogapsresult897v4.Rds")
+
+# make sure pattern matrix is in same order as the input data
+patterns_in_order <-t(cogapsresult897@sampleFactors[colnames(spd_897),])
+
+# add CoGAPS patterns as an assay
+spd_897[["CoGAPS"]] <- CreateAssayObject(counts = patterns_in_order)
+
+DefaultAssay(spd_897) <- "CoGAPS"
+pattern_names = rownames(spd_897@assays$CoGAPS)
+
+library(viridis)
+color_palette <- viridis(n=10)
+
+p1=FeaturePlot(spd_897, pattern_names, cols=color_palette, reduction = "umap") & NoLegend()
+p1
+ggsave("sample897_CoGAPS4Patterns_FeaturePlot.pdf")
+
+p2 <- SpatialFeaturePlot(spd_897, features = c("Pattern-1","Pattern-2", "Pattern-3", "Pattern-4"))
+p2
+ggsave("sample897_CoGAPS4Patterns_SpatialFeaturePlot.pdf")
+
+p3 <- VlnPlot(spd_897, features = c("Pattern-1","Pattern-2", "Pattern-3", "Pattern-4"), pt.size = 0.1,ncol=2)
+p3
+ggsave("sample897_CoGAPS4Patterns_VlnPlot.pdf")
+
+
+cogapsresult899=readRDS("cogapsresult899v4.Rds")
+# make sure pattern matrix is in same order as the input data
+patterns_in_order <-t(cogapsresult899@sampleFactors[colnames(spd_899),])
+
+# add CoGAPS patterns as an assay
+spd_899[["CoGAPS"]] <- CreateAssayObject(counts = patterns_in_order)
+
+DefaultAssay(spd_899) <- "CoGAPS"
+pattern_names = rownames(spd_899@assays$CoGAPS)
+
+library(viridis)
+color_palette <- viridis(n=10)
+
+
+p1=FeaturePlot(spd_899, pattern_names, cols=color_palette, reduction = "umap") & NoLegend()
+p1
+ggsave("sample899_CoGAPS4Patterns_FeaturePlot.pdf")
+
+p2 <- SpatialFeaturePlot(spd_899, features = c("Pattern-1","Pattern-2", "Pattern-3", "Pattern-4"))
+p2
+ggsave("sample899_CoGAPS4Patterns_SpatialFeaturePlot.pdf")
+
+p3 <- VlnPlot(spd_899, features = c("Pattern-1","Pattern-2", "Pattern-3", "Pattern-4"), pt.size = 0.1,ncol=2)
+p3
+ggsave("sample899_CoGAPS4Patterns_VlnPlot.pdf")
+```
+
+## Gene set analyses for the respective CoGAPS patterns
+
+```{r GSEA}
+
+
+hallmarks897 <- getPatternHallmarks(cogapsresult897)
+saveRDS(hallmarks897,file="hallmarks897.rds")
+pdf(file="hallmarks897.pdf")
+plotPatternHallmarks(cogapsresult897, hallmarks897, 1)
+plotPatternHallmarks(cogapsresult897, hallmarks897, 2)
+plotPatternHallmarks(cogapsresult897, hallmarks897, 3)
+plotPatternHallmarks(cogapsresult897, hallmarks897, 4)
+dev.off()
+
+hallmarks899 <- getPatternHallmarks(cogapsresult899)
+saveRDS(hallmarks899,file="hallmarks899.rds")
+hallmarks899 <- readRDS("hallmarks899.rds")
+pdf(file="hallmarks899.pdf")
+plotPatternHallmarks(cogapsresult899, hallmarks899, 1)
+plotPatternHallmarks(cogapsresult899, hallmarks899, 2)
+plotPatternHallmarks(cogapsresult899, hallmarks899, 3)
+plotPatternHallmarks(cogapsresult899, hallmarks899, 4)
+dev.off()
+```

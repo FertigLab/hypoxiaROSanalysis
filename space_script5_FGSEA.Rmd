@@ -1,0 +1,362 @@
+---
+title: "spaceloading"
+author: "Jeanette Johnson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE)
+library(Seurat)
+library(SeuratObject)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+library(msigdb)
+library(msigdbr)
+library(ExperimentHub)
+library(GSEABase)
+library(limma)
+library('org.Hs.eg.db')
+library(GSAtests)
+library(GSA)
+library(DT)
+library("PPInfer")
+library("fgsea")
+
+```
+
+
+## Heatmaps for the respective cluster marker genes
+
+We will use the differential expression results for each cluster later in the GSEAs
+
+## Starting with Tumor 897
+
+```{r}
+
+# setwd("D:/bigdata/GilkesSSCoGAPS/")
+
+
+
+load("Sobjects.rda")
+
+
+
+# This will find all the markers that distinguish one cluster from all others.  
+# The intent is to use the log fold changes to 
+# only.pos F means that there will be differentially expressed 
+# min.pct = 0.01 means that there has to be at least some small number of cells expressing the gene for it to be in the output, so we don't get results that include all unexpressed genes for all samples
+# logfc.threshold = 0.1 is to again ensure that there is at least some minimal amount of variance between the genes in the clusters.
+
+
+#code was run and results were saved to speed up the generation/editing of the rmd output.
+#spd_897_markers02_all <- FindAllMarkers(spd_897, test.use = "MAST", only.pos = F,random.seed = 42,min.pct = 0.01, logfc.threshold = 0.1)
+#save(spd_897_markers02_all,file="spd_897_markers02_all.rda")
+load("spd_897_markers02_all.rda")
+markers02_all_df_897 <- as.data.frame(spd_897_markers02_all %>% group_by(cluster) %>% slice_max(n = 100000, order_by = abs(avg_log2FC)))
+markers02_all_df_897_top10 <- as.data.frame(spd_897_markers02_all %>% group_by(cluster) %>% slice_max(n = 10, order_by = avg_log2FC))
+DoHeatmap(spd_897,features = markers02_all_df_897_top10$gene)
+ggsave("cluster_markers_final_Heatmap_897.pdf")
+write.csv(markers02_all_df_897, "spd_897_final_markers.csv", row.names = FALSE)
+
+```
+
+## Tumor 899
+
+```{r}
+
+
+#spd_899_markers02_all <- FindAllMarkers(spd_899, test.use = "MAST", only.pos = F,random.seed = 42,min.pct = 0.01, logfc.threshold = 0.1)
+#save(spd_899_markers02_all,file="spd_899_markers02_all.rda")
+load("spd_899_markers02_all.rda")
+markers02_all_df_899 <- as.data.frame(spd_899_markers02_all %>% group_by(cluster) %>% slice_max(n = 100000, order_by = abs(avg_log2FC)))
+markers02_all_df_899_top10 <- as.data.frame(spd_899_markers02_all %>% group_by(cluster) %>% slice_max(n = 10, order_by = avg_log2FC))
+DoHeatmap(spd_899,features = markers02_all_df_899_top10$gene)
+ggsave("cluster_markers_final_Heatmap_899.pdf")
+write.csv(markers02_all_df_899, "spd_899_final_markers.csv", row.names = FALSE)
+
+
+
+
+
+```
+## Gene Set Analyses for Clusters
+
+We see many of the gene sets stand out for the clusters that we did for the CoGAPS patterns.
+
+```{r}
+
+load("geneSetsAll.rda") # Broad msigdb gene sets downloaded and formatted for GSEA
+
+
+library(fgsea)
+
+########## Fgsea 899
+
+
+
+table(markers02_all_df_899$cluster)
+
+spd899_lfc_02=markers02_all_df_899$avg_log2FC
+names(spd899_lfc_02)=markers02_all_df_899$gene
+spd899_c1lfc_02=spd899_lfc_02[which(markers02_all_df_899$cluster==1)]
+spd899_c1lfc_02=spd899_c1lfc_02[order(abs(spd899_c1lfc_02),decreasing = T)]
+#cluster 2
+spd899_c2lfc_02=spd899_lfc_02[which(markers02_all_df_899$cluster==2)]
+spd899_c2lfc_02=spd899_c2lfc_02[order(abs(spd899_c2lfc_02),decreasing = T)]
+#cluster 0
+spd899_c0lfc_02=spd899_lfc_02[which(markers02_all_df_899$cluster==0)]
+spd899_c0lfc_02=spd899_c0lfc_02[order(abs(spd899_c0lfc_02),decreasing = T)]
+
+spd899_c0_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd899_c0lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+
+spd899_c1_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd899_c1lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+spd899_c2_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd899_c2lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+
+spd899_c0_fgseaRes02=spd899_c0_fgseaRes02[order(spd899_c0_fgseaRes02$padj),]
+spd899_c1_fgseaRes02=spd899_c1_fgseaRes02[order(spd899_c1_fgseaRes02$padj),]
+spd899_c2_fgseaRes02=spd899_c2_fgseaRes02[order(spd899_c2_fgseaRes02$padj),]
+
+write.csv(as.matrix(spd899_c0_fgseaRes02),row.names=F,file="Cluster0_FGSEA_Hallmarks_899_final.csv")
+write.csv(as.matrix(spd899_c1_fgseaRes02),row.names=F,file="Cluster1_FGSEA_Hallmarks_899_final.csv")
+write.csv(as.matrix(spd899_c2_fgseaRes02),row.names=F,file="Cluster2_FGSEA_Hallmarks_899_final.csv")
+
+
+GSEA.barplot(spd899_c0_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c0_fgseaRes02),title="Cluster0_899_final")
+ggsave("Cluster0_FGSEA_Hallmarks_899_final_barplot.pdf")
+
+i="HALLMARK_HYPOXIA"
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd899_c0lfc_02) + labs(title=paste0("Cluster0_899_",i))  
+
+
+GSEA.barplot(spd899_c1_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c1_fgseaRes02),title="Cluster1_899_final")
+ggsave("Cluster1_FGSEA_Hallmarks_899_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd899_c1lfc_02) + labs(title=paste0("Cluster1_899_",i))  
+
+
+
+GSEA.barplot(spd899_c2_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c2_fgseaRes02),title="Cluster2_899_final")
+ggsave("Cluster2_FGSEA_Hallmarks_899_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd899_c2lfc_02) + labs(title=paste0("Cluster2_899_",i))  
+
+
+############# Fgsea 897
+
+
+table(spd_897_markers02_all$cluster)
+#cluster 1
+spd897_lfc_02=spd_897_markers02_all$avg_log2FC
+names(spd897_lfc_02)=spd_897_markers02_all$gene
+spd897_c1lfc_02=spd897_lfc_02[which(spd_897_markers02_all$cluster==1)]
+#cluster 2
+spd897_c2lfc_02=spd897_lfc_02[which(spd_897_markers02_all$cluster==2)]
+#cluster 3
+spd897_c3lfc_02=spd897_lfc_02[which(spd_897_markers02_all$cluster==3)]
+#cluster 4
+spd897_c4lfc_02=spd897_lfc_02[which(spd_897_markers02_all$cluster==4)]
+#cluster 5
+spd897_c5lfc_02=spd897_lfc_02[which(spd_897_markers02_all$cluster==5)]
+#cluster 0
+spd897_c0lfc_02=spd897_lfc_02[which(spd_897_markers02_all$cluster==0)]
+
+spd897_c0_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd897_c0lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+
+spd897_c1_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd897_c1lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+spd897_c2_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd897_c2lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+
+spd897_c3_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd897_c3lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+spd897_c4_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd897_c4lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+
+spd897_c5_fgseaRes02 <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = spd897_c5lfc_02,
+                  minSize  = 5,
+                  maxSize  = 500)
+
+spd897_c0_fgseaRes02=spd897_c0_fgseaRes02[order(spd897_c0_fgseaRes02$padj),]
+spd897_c1_fgseaRes02=spd897_c1_fgseaRes02[order(spd897_c1_fgseaRes02$padj),]
+spd897_c2_fgseaRes02=spd897_c2_fgseaRes02[order(spd897_c2_fgseaRes02$padj),]
+spd897_c3_fgseaRes02=spd897_c3_fgseaRes02[order(spd897_c3_fgseaRes02$padj),]
+spd897_c4_fgseaRes02=spd897_c4_fgseaRes02[order(spd897_c4_fgseaRes02$padj),]
+spd897_c5_fgseaRes02=spd897_c5_fgseaRes02[order(spd897_c5_fgseaRes02$padj),]
+
+write.csv(as.matrix(spd897_c0_fgseaRes02),row.names=F,file="Cluster0_GSEA_Hallmarks_897_final.csv")
+write.csv(as.matrix(spd897_c1_fgseaRes02),row.names=F,file="Cluster1_GSEA_Hallmarks_897_final.csv")
+write.csv(as.matrix(spd897_c2_fgseaRes02),row.names=F,file="Cluster2_GSEA_Hallmarks_897_final.csv")
+write.csv(as.matrix(spd897_c3_fgseaRes02),row.names=F,file="Cluster3_GSEA_Hallmarks_897_final.csv")
+write.csv(as.matrix(spd897_c4_fgseaRes02),row.names=F,file="Cluster4_GSEA_Hallmarks_897_final.csv")
+write.csv(as.matrix(spd897_c5_fgseaRes02),row.names=F,file="Cluster5_GSEA_Hallmarks_897_final.csv")
+
+
+
+
+
+GSEA.barplot(spd897_c0_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd897_c0_fgseaRes02),title="Cluster0_897_final")
+ggsave("Cluster0_FGSEA_Hallmarks_897_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd897_c0lfc_02) + labs(title=paste0("Cluster0_897_",i))  
+
+
+
+
+GSEA.barplot(spd897_c1_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd897_c1_fgseaRes02),title="Cluster1_897_final")
+ggsave("Cluster1_FGSEA_Hallmarks_897_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd897_c1lfc_02) + labs(title=paste0("Cluster1_897_",i))  
+
+
+
+
+GSEA.barplot(spd897_c2_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd897_c2_fgseaRes02),title="Cluster2_897_final")
+ggsave("Cluster2_FGSEA_Hallmarks_897_final_barplot.pdf")
+
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd897_c3lfc_02) + labs(title=paste0("Cluster3_897_",i))  
+
+
+
+GSEA.barplot(spd897_c3_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd897_c3_fgseaRes02),title="Cluster3_897_final")
+ggsave("Cluster3_FGSEA_Hallmarks_897_final_barplot.pdf")
+
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd897_c3lfc_02) + labs(title=paste0("Cluster3_897_",i))  
+
+
+GSEA.barplot(spd897_c4_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd897_c4_fgseaRes02),title="Cluster4_897_final")
+ggsave("Cluster4_FGSEA_Hallmarks_897_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd897_c4lfc_02) + labs(title=paste0("Cluster4_897_",i))  
+
+
+GSEA.barplot(spd897_c5_fgseaRes02, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd897_c5_fgseaRes02),title="Cluster5_897_final")
+ggsave("Cluster5_FGSEA_Hallmarks_897_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               spd897_c5lfc_02) + labs(title=paste0("Cluster5_897_",i))  
+
+
+
+```
+
+## Pairwise Gene Set Analyses for Clusters
+
+```{r}
+
+
+cluster10.markers899 <- FindMarkers(spd_899, ident.1 = 1, ident.2 = 0, test.use = "MAST",random.seed = 42)
+cluster21.markers899 <- FindMarkers(spd_899, ident.1 = 2, ident.2 = 1, test.use = "MAST",random.seed = 42)
+cluster20.markers899 <- FindMarkers(spd_899, ident.1 = 2, ident.2 = 0, test.use = "MAST",random.seed = 42)
+
+#cluster 20
+clust20.lfc899=cluster20.markers899$avg_log2FC
+names(clust20.lfc899)=rownames(cluster20.markers899)
+
+spd899_c20contrast_fgseaRes <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = clust20.lfc899,
+                  minSize  = 5,
+                  maxSize  = 500)
+spd899_c20contrast_fgseaRes=spd899_c20contrast_fgseaRes[order(spd899_c20contrast_fgseaRes$padj),]
+
+#cluster 10
+clust10.lfc899=cluster10.markers899$avg_log2FC
+names(clust10.lfc899)=rownames(cluster10.markers899)
+
+spd899_c10contrast_fgseaRes <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = clust10.lfc899,
+                  minSize  = 5,
+                  maxSize  = 500)
+spd899_c10contrast_fgseaRes=spd899_c10contrast_fgseaRes[order(spd899_c10contrast_fgseaRes$padj),]
+
+#cluster 21
+clust21.lfc899=cluster21.markers899$avg_log2FC
+names(clust21.lfc899)=rownames(cluster21.markers899)
+
+spd899_c21contrast_fgseaRes <- fgsea(pathways = geneSetsAll$ch, 
+                  stats    = clust21.lfc899,
+                  minSize  = 5,
+                  maxSize  = 500)
+spd899_c21contrast_fgseaRes=spd899_c21contrast_fgseaRes[order(spd899_c21contrast_fgseaRes$padj),]
+
+write.csv(as.matrix(spd899_c20contrast_fgseaRes),row.names=F,file="Cluster20_Contrast_GSEA_Hallmarks_899_update20240314.csv")
+write.csv(as.matrix(spd899_c10contrast_fgseaRes),row.names=F,file="Cluster10_Contrast_GSEA_Hallmarks_899_update20240314.csv")
+write.csv(as.matrix(spd899_c21contrast_fgseaRes),row.names=F,file="Cluster21_Contrast_GSEA_Hallmarks_899_update20240314.csv")
+
+GSEA.barplot(spd899_c20contrast_fgseaRes, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c20contrast_fgseaRes),title="Cluster20_899_pairwise")
+ggsave("Cluster20_FGSEA_Hallmarks_899_barplot_pairwise.pdf")
+
+i="HALLMARK_HYPOXIA"
+plotEnrichment(geneSetsAll$ch[[i]],
+               clust20.lfc899) + labs(title=paste0("Cluster20_899_",i))  
+
+
+GSEA.barplot(spd899_c10contrast_fgseaRes, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c10contrast_fgseaRes),title="Cluster10_899_pairwise")
+ggsave("Cluster10_FGSEA_Hallmarks_899_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               clust10.lfc899) + labs(title=paste0("Cluster10_899_",i))  
+
+
+
+GSEA.barplot(spd899_c21contrast_fgseaRes, category = 'pathway', score = 'NES',
+             pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c21contrast_fgseaRes),title="Cluster21_899_pairwise")
+ggsave("Cluster2_FGSEA_Hallmarks_899_final_barplot.pdf")
+
+
+plotEnrichment(geneSetsAll$ch[[i]],
+               clust21.lfc899) + labs(title=paste0("Cluster21_899_",i)) 
+```

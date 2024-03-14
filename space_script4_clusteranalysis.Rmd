@@ -1,0 +1,177 @@
+---
+title: "spaceloading"
+author: "Michael Considine"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE)
+library(Seurat)
+library(SeuratObject)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+library(msigdb)
+library(msigdbr)
+library(ExperimentHub)
+library(GSEABase)
+library(limma)
+library('org.Hs.eg.db')
+library(GSAtests)
+library(GSA)
+library(DT)
+```
+
+
+## Heatmaps for the respective cluster marker genes
+
+We load the data without the CoGAPS for Seurat functionality, otherwise it will find that the CoGAPS patterns are the most variable features, which is not the list of genes that we are looking to find here.
+
+Further, we find the spatially variable genes and plot them spatially.  The resulting plots were not terribly informative in this case, they were more useful in other datasets.
+
+
+
+```{r}
+
+# setwd("D:/bigdata/GilkesSSCoGAPS/")
+
+
+#################################################
+# INDENTIFICATION OF SPATIALLY VARIABLE FEATURES
+#################################################
+
+load("Sobjects.rda")
+
+spd_897 <- FindVariableFeatures(spd_897, selection.method = 'vst', nfeatures = 2000)
+
+top10_varfeat <- head(VariableFeatures(spd_897), 10)
+top10_varfeat
+# [1] "HBB"    "COL3A1" "CASZ1"  "COL1A1" "KRT17"  "HSPA6"  "HBD"    "NDRG1"  "COL1A2" "HSPA1B"
+
+spd_897 <- FindSpatiallyVariableFeatures(spd_897, features = VariableFeatures(spd_897)[1:2000], 
+                                          selection.method = "markvariogram")
+
+top_features <- head(SpatiallyVariableFeatures(spd_897, selection.method = "markvariogram"), 10)
+SpatialFeaturePlot(spd_897, features = top_features, ncol = 5, alpha = c(0.1,1))
+ggsave("top_features897.pdf")
+
+
+spd_899 <- FindVariableFeatures(spd_899, selection.method = 'vst', nfeatures = 2000)
+
+top10_varfeat <- head(VariableFeatures(spd_899), 10)
+top10_varfeat
+# [1] "HBB"    "HSPA1B" "HSPA6"  "HSPA1A" "NDRG1"  "DNAJB1" "COL1A1" "MMP1"   "COL3A1" "HBD"   
+
+spd_899 <- FindSpatiallyVariableFeatures(spd_899, features = VariableFeatures(spd_899)[1:2000], 
+                                          selection.method = "markvariogram")
+
+top_features <- head(SpatiallyVariableFeatures(spd_899, selection.method = "markvariogram"), 10)
+SpatialFeaturePlot(spd_899, features = top_features, ncol = 5, alpha = c(0.1,1))
+ggsave("top_features899.pdf")
+
+
+
+
+```
+
+
+## Exploring the CoGAPS patterns GSEA results
+
+We selected the gene sets of most interest from CoGAPS to visualize further
+
+Hypoxia, TNFA sig via NFKP, KRAS, Glycolosis, IL2, STAT5, MTORC1, Coagulation, PF3 
+
+```{r}
+genesets = msigdbr(species = "Homo sapiens", category = "H")
+hypgs_genes=genesets[genesets$gs_name=="HALLMARK_HYPOXIA",]$gene_symbol
+#> hypgs_genes
+#  [1] "ACKR3"    "ADM"      "ADORA2B"  "AK4"      "AKAP12"   "ALDOA"    "ALDOB"    "ALDOC"    "AMPD3"    "ANGPTL4" 
+# [11] "ANKZF1"   "ANXA2"    "ATF3"     "ATP7A"    "B3GALT6"  "B4GALNT2" "BCAN"     "BCL2"     "BGN"      "BHLHE40" 
+# [21] "BNIP3L"   "BRS3"     "BTG1"     "CA12"     "CASP6"    "CAV1"     "CAVIN1"   "CAVIN3"   "CCN1"     "CCN2"    
+# [31] "CCN5"     "CCNG2"    "CDKN1A"   "CDKN1B"   "CDKN1C"   "CDKN1C"   "CHST2"    "CHST3"    "CITED2"   "COL5A1"  
+# [41] "CP"       "CSRP2"    "CXCR4"    "DCN"      "DDIT3"    "DDIT4"    "DPYSL4"   "DTNA"     "DUSP1"    "EDN2"    
+# [51] "EFNA1"    "EFNA3"    "EGFR"     "ENO1"     "ENO2"     "ENO3"     "ERO1A"    "ERRFI1"   "ETS1"     "EXT1"    
+# [61] "F3"       "FAM162A"  "FBP1"     "FOS"      "FOSL2"    "FOXO3"    "GAA"      "GALK1"    "GAPDH"    "GAPDHS"  
+# [71] "GBE1"     "GCK"      "GCNT2"    "GCNT2"    "GLRX"     "GPC1"     "GPC3"     "GPC4"     "GPI"      "GPI"     
+# [81] "GRHPR"    "GYS1"     "HAS1"     "HDLBP"    "HEXA"     "HK1"      "HK2"      "HMOX1"    "HOXB9"    "HS3ST1"  
+# [91] "HSPA5"    "IDS"      "IER3"     "IER3"     "IER3"     "IER3"     "IER3"     "IER3"     "IER3"     "IGFBP1"  
+#[101] "IGFBP3"   "IL6"      "ILVBL"    "INHA"     "IRS2"     "ISG20"    "JMJD6"    "JUN"      "KDELR3"   "KDM3A"   
+#[111] "KIF5A"    "KLF6"     "KLF7"     "KLHL24"   "LALBA"    "LARGE1"   "LDHA"     "LDHA"     "LDHC"     "LOX"     
+#[121] "LXN"      "MAFF"     "MAP3K1"   "MIF"      "MIF"      "MT1E"     "MT2A"     "MXI1"     "MYH9"     "NAGK"    
+#[131] "NCAN"     "NDRG1"    "NDST1"    "NDST2"    "NEDD4L"   "NFIL3"    "NOCT"     "NR3C1"    "P4HA1"    "P4HA2"   
+#[141] "PAM"      "PCK1"     "PDGFB"    "PDK1"     "PDK3"     "PFKFB3"   "PFKL"     "PFKP"     "PGAM2"    "PGF"     
+#[151] "PGK1"     "PGM1"     "PGM2"     "PHKG1"    "PIM1"     "PKLR"     "PKLR"     "PKP1"     "PLAC8"    "PLAUR"   
+#[161] "PLIN2"    "PNRC1"    "PPARGC1A" "PPFIA4"   "PPP1R15A" "PPP1R3C"  "PRDX5"    "PRKCA"    "PYGM"     "RBPJ"    
+#[171] "RORA"     "RRAGD"    "S100A4"   "SAP30"    "SCARB1"   "SDC2"     "SDC3"     "SDC4"     "SELENBP1" "SERPINE1"
+#[181] "SIAH2"    "SLC25A1"  "SLC2A1"   "SLC2A3"   "SLC2A5"   "SLC37A4"  "SLC37A4"  "SLC37A4"  "SLC6A6"   "SRPX"    
+#[191] "STBD1"    "STC1"     "STC2"     "SULT2B1"  "TES"      "TGFB3"    "TGFBI"    "TGM2"     "TIPARP"   "TKTL1"   
+#[201] "TMEM45A"  "TNFAIP3"  "TPBG"     "TPBG"     "TPD52"    "TPI1"     "TPST2"    "UGP2"     "VEGFA"    "VHL"     
+#[211] "VLDLR"    "WSB1"     "XPNPEP1"  "ZFP36"    "ZNF292"  
+
+spd_897 <- AddModuleScore(spd_897, features = hypgs_genes, name = 'HYPOXIA', ctrl = 3, nbin = 12, seed=42)
+
+hypx897 <- SpatialFeaturePlot(spd_897, features = 'HYPOXIA1',  pt.size.factor = 1.5)
+hypx897
+ggsave('HYPX_modscore_897.pdf')
+
+spd_899 <- AddModuleScore(spd_899, features = hypgs_genes, name = 'HYPOXIA', ctrl = 3, nbin = 12, seed=42)
+
+hypx899 <- SpatialFeaturePlot(spd_899, features = 'HYPOXIA1',  pt.size.factor = 1.5)
+hypx899
+ggsave('HYPX_modscore_899.pdf')
+
+## TNFA sig via NFKP
+TNFAgenes=genesets[genesets$gs_name=="HALLMARK_TNFA_SIGNALING_VIA_NFKB",]$gene_symbol
+
+spd_897 <- AddModuleScore(spd_897, features = hypgs_genes, name = 'TNFA', ctrl = 3, nbin = 12, seed=42)
+
+TNFA897 <- SpatialFeaturePlot(spd_897, features = 'TNFA1',  pt.size.factor = 1.5)
+TNFA897
+ggsave('TNFA_modscore_897.pdf')
+
+spd_899 <- AddModuleScore(spd_899, features = hypgs_genes, name = 'TNFA', ctrl = 3, nbin = 12, seed=42)
+
+TNFA899 <- SpatialFeaturePlot(spd_899, features = 'TNFA1',  pt.size.factor = 1.5)
+TNFA899
+ggsave('TNFA_modscore_899.pdf')
+
+#KRAS
+
+getmodscore=function(spd,pathwayname,pathwayshort,textspd){
+thegenes=genesets[genesets$gs_name==pathwayname,]$gene_symbol  
+cat("got genes")
+spd=AddModuleScore(spd, features = intersect(thegenes,rownames(spd)), name = pathwayshort, ctrl = 3, nbin = 12, seed=42)
+cat("add module done")
+tmp <- SpatialFeaturePlot(spd, features = paste0(pathwayshort,'1'),  pt.size.factor = 1.5)
+cat("made plot")
+tmp
+cat("plotted plot")
+ggsave(paste0(pathwayshort,"_modscore_",textspd,".pdf"))
+}
+
+getmodscore(spd_897,"HALLMARK_KRAS_SIGNALING_UP","KRASUP","spd_897")
+getmodscore(spd_899,"HALLMARK_KRAS_SIGNALING_UP","KRASUP","spd_899")
+
+#Glycolosis
+getmodscore(spd_897,"HALLMARK_GLYCOLYSIS","GLYCOLYSIS","spd_897")
+getmodscore(spd_899,"HALLMARK_GLYCOLYSIS","GLYCOLYSIS","spd_899")
+
+
+#IL2Stat5
+getmodscore(spd_897,"HALLMARK_IL2_STAT5_SIGNALING","IL2_STAT5","spd_897")
+getmodscore(spd_899,"HALLMARK_IL2_STAT5_SIGNALING","IL2_STAT5","spd_899")
+
+#MTORC1
+getmodscore(spd_897,"HALLMARK_MTORC1_SIGNALING","MTORC1","spd_897")
+getmodscore(spd_899,"HALLMARK_MTORC1_SIGNALING","MTORC1","spd_899")
+
+#Coagulation
+getmodscore(spd_897,"HALLMARK_COAGULATION","COAGULATION","spd_897")
+getmodscore(spd_899,"HALLMARK_COAGULATION","COAGULATION","spd_899")
+
+#P53 
+getmodscore(spd_897,"HALLMARK_P53_PATHWAY","P53","spd_897")
+getmodscore(spd_899,"HALLMARK_P53_PATHWAY","P53","spd_899")
+```

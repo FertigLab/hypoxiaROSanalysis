@@ -1,0 +1,267 @@
+---
+title: "spaceloading"
+author: "Jeanette Johnson and Michael Considine"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+
+```
+
+## Single Cell Spatial Analysis
+
+This analysis serves as a followup to peer review feedback to a study submitted for publication.
+
+The goals are to repeat the prior analysis, while including feedback from the reviewer into the process.
+
+We will perform QC, algorithmically remove the necrotic core from both data sets, generate K-Means clustering for both datasets without he necrotic cores, run CoGAPS on both datasets independently, evaluate the CoGAPS patterns and clusters with GSEA, and consider if the prior analysis yielded similar results- despite using different software/algorithms.
+
+```{r load space info into seurat}
+#spd_897 <- Load10X_Spatial("/data/outs/")
+#spd_899 <- Load10X_Spatial("/data/outs899/")
+spd_897 <- Load10X_Spatial("D:/bigdata/GilkesSSCoGAPS/outs897/outs897/")
+spd_899 <- Load10X_Spatial("D:/bigdata/GilkesSSCoGAPS/outs899/outs899/")
+# the Seurat object is a complex matrix
+spd_897
+spd_899
+```
+
+## Initial look at the data
+
+The low counts are associated with the low expression of necrotic samples, and we can visibly see them in the blue regions of both datasets.
+
+```{r}
+##################
+# DATA PROCESSING
+##################
+
+### QC and filtering
+
+# creating a metadata column with the percent of mitochondrial (percent_mt) reads per spot
+spd_897[['percent_mt']] <- PercentageFeatureSet(spd_897, pattern = '^MT-')
+spd_899[['percent_mt']] <- PercentageFeatureSet(spd_899, pattern = '^MT-')
+
+# plotting metrics for reads per spot (nCount), genes per spot (nFeature) and MT reads (percent_mt)
+VlnPlot(spd_897, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mt"), pt.size = 0.1) + ggtitle("897 feature count")
+ggsave("sample897_QC_Vln_20231215.pdf") 
+VlnPlot(spd_899, features = c("nCount_Spatial", "nFeature_Spatial", "percent_mt"), pt.size = 0.1) + ggtitle("899 feature count")
+ggsave("sample899_QC_Vln_20231215.pdf")
+
+# plotting spatial distribution of nCount in the sample
+SpatialFeaturePlot(spd_897, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("897 feature count") + theme(legend.position = "right") 
+ggsave("sample897_nCount_Spatial_20231215.pdf")
+
+SpatialFeaturePlot(spd_899, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 feature count") + theme(legend.position = "right") 
+ggsave("sample899_nCount_Spatial_20231215.pdf")
+
+
+```
+
+```{r first vis}
+#for side by side for the same sample
+
+# plotting metrics for reads per spot (nCount), genes per spot (nFeature) and MT reads (percent_mt)
+plot1 <- VlnPlot(spd_897, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("897 feature count")
+# plotting spatial distribution of nCount in the sample
+plot2 <- SpatialFeaturePlot(spd_897, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("897 spatial features")
+wrap_plots(plot1, plot2)
+# plotting metrics for reads per spot (nCount), genes per spot (nFeature) and MT reads (percent_mt)
+plot3 <- VlnPlot(spd_899, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("899 feature count")
+plot4 <- SpatialFeaturePlot(spd_899, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 spatial features")
+wrap_plots(plot3, plot4)
+```
+
+## We filter using nCount_Spatial > 0 & nFeature_Spatial > 100 & percent_mt < 20
+
+```{r filtering}
+# filtering
+spd_897 <- subset(spd_897, subset = nCount_Spatial > 0 & nFeature_Spatial > 100 & percent_mt < 20)
+# nCount, nFeature and percent_mt cutoffs will vary by sample
+
+spd_899 <- subset(spd_899, subset = nCount_Spatial > 0 & nFeature_Spatial > 100 & percent_mt < 20)
+# nCount, nFeature and percent_mt cutoffs will vary by sample
+```
+
+## And look at the updated plots, there few changes after QC
+
+There are very few cells removed from QC, lending credence to the prior analysis being largely unaffected by QC issues.
+
+```{r}
+#update plots post-filtering
+# plotting metrics for reads per spot (nCount), genes per spot (nFeature) and MT reads (percent_mt)
+plot1 <- VlnPlot(spd_897, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("897 feature count")
+# plotting spatial distribution of nCount in the sample
+plot2 <- SpatialFeaturePlot(spd_897, features = "nCount_Spatial") +
+  theme(legend.position = "right") + ggtitle("897 spatial features")
+wrap_plots(plot1, plot2)
+ggsave("sample897_counts_postfiltering_20231215.pdf")
+# plotting metrics for reads per spot (nCount), genes per spot (nFeature) and MT reads (percent_mt)
+plot3 <- VlnPlot(spd_899, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("899 feature count")
+plot4 <- SpatialFeaturePlot(spd_899, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 spatial features")
+wrap_plots(plot3, plot4)
+ggsave("sample899_counts_postfiltering_20231215.pdf")
+
+```
+
+
+## Cluster using KNN and UMAP
+
+```{r clustering}
+#this pipeline is required to generate K-means clustering, which is FindNeighbors and FindClusters
+spd_897 <- NormalizeData(spd_897) 
+spd_897=FindVariableFeatures(spd_897) 
+all.genes <- rownames(spd_897)
+spd_897 <- ScaleData(spd_897, features = all.genes)
+spd_897 <- RunPCA(spd_897, verbose = FALSE)
+spd_897 <- FindNeighbors(spd_897, dims=1:10)
+spd_897 <- FindClusters(spd_897,resolution = 0.5)
+spd_897 <- RunUMAP(spd_897, reduction = "pca", dims = 1:10)
+
+p1 <- DimPlot(spd_897, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(spd_897, label = TRUE, label.size = 3)
+p1 + p2
+ggsave("sample897_umap_spatial_update_20231215.pdf")
+
+spd_899 <- NormalizeData(spd_899)
+spd_899=FindVariableFeatures(spd_899)
+all.genes <- rownames(spd_899)
+spd_899 <- ScaleData(spd_899, features = all.genes)
+spd_899 <- RunPCA(spd_899, verbose = FALSE)
+spd_899 <- FindNeighbors(spd_899, dims=1:10)
+spd_899 <- FindClusters(spd_899,resolution = 0.5)
+spd_899 <- RunUMAP(spd_899, reduction = "pca", dims = 1:10)
+
+p1 <- DimPlot(spd_899, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(spd_899, label = TRUE, label.size = 3)
+p1 + p2
+ggsave("sample899_umap_spatial_update_20231215.pdf")
+
+p2 <- SpatialDimPlot(spd_899, label = FALSE,image.alpha=0)
+p2
+ggsave("sample899_umap_spatial_update_nolabels_20240314.pdf")
+
+
+plot1 <- VlnPlot(spd_897, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("897 feature count")
+# plotting spatial distribution of nCount in the sample
+plot2 <- SpatialFeaturePlot(spd_897, features = "nCount_Spatial") +
+  theme(legend.position = "right") + ggtitle("897 spatial features")
+plot1+plot2
+ggsave("sample897_counts_presubsetResults_20231215.pdf")
+
+
+plot3 <- VlnPlot(spd_899, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("899 feature count")
+plot4 <- SpatialFeaturePlot(spd_899, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 spatial features")
+plot3+plot4
+ggsave("sample899_counts_presubsetResults_20231215.pdf")
+```
+
+## We retain clusters 0, 1 3, and 4 for 897, and clusters 1, 2, and 3 for 899, and display the updated plots.
+
+The other clusters have numerous low expression points, indicating that they are associated with the necrotic core which we wish to leave out of the analyses.
+
+After removing the core we run clustering with the remaining cells so that the clustering that we use will not have been influenced by the cells that we removed.
+
+The remaining plots reveal the removal of the necrotic core, leaving few cells and likely artifacts in the visualizations.
+
+
+```{r subset for CoGAPS}
+
+# filtering out the necrotic core clusters, can be done with either seurat clusters or idents
+#spd_897hold <- subset(spd_897, subset = seurat_clusters == c(0,1,4) )
+#spd_897hold <- subset(spd_897, idents= c(0,1,4) ) # Seurat v5
+spd_897hold <- subset(spd_897, idents= c(0,1,4) )
+# remove the 2nd and 3rd cluster
+
+#spd_899hold <- subset(spd_899, subset = seurat_clusters == c(1:4))
+#spd_899hold <- subset(spd_899, idents= c(1,2,3) ) # Seurat v5
+spd_899hold <- subset(spd_899, idents= c(1,2,3) ) 
+# remove the 0, 5, 6, 7, 8th clusters
+
+
+#update plots to visualize post-filtering idents
+
+plot1 <- VlnPlot(spd_897hold, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("897 feature count")
+# plotting spatial distribution of nCount in the sample
+plot2 <- SpatialFeaturePlot(spd_897hold, features = "nCount_Spatial") +
+  theme(legend.position = "right") + ggtitle("897 spatial features")
+plot1+plot2
+ggsave("sample897_counts_subsetResults_20231215.pdf")
+
+plot3 <- VlnPlot(spd_899hold, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("899 feature count")
+plot4 <- SpatialFeaturePlot(spd_899hold, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 spatial features")
+plot3+plot4
+ggsave("sample899_counts_subsetResults_20231215.pdf")
+
+
+#load the original dataset
+
+spd_897 <- Load10X_Spatial("D:/bigdata/GilkesSSCoGAPS/outs897/outs897/")
+spd_899 <- Load10X_Spatial("D:/bigdata/GilkesSSCoGAPS/outs899/outs899/")
+
+spd_897 = subset(spd_897, cells = Cells(spd_897hold))
+spd_899 = subset(spd_899, cells = Cells(spd_899hold))
+
+#extract the counts to use for CoGAPS
+spd_897counts= FetchData(spd_897,vars = rownames(spd_897))
+spd_899counts= FetchData(spd_899,vars = rownames(spd_899))
+
+#log the counts
+spd_897counts=log2(spd_897counts+1)
+spd_899counts=log2(spd_899counts+1)
+save(spd_897counts,spd_899counts,file="logCounts_Updated_20231218.rda")
+
+
+#check the pre-cogaps clustering
+spd_897 <- NormalizeData(spd_897) 
+spd_897=FindVariableFeatures(spd_897) 
+all.genes <- rownames(spd_897)
+spd_897 <- ScaleData(spd_897, features = all.genes)
+spd_897 <- RunPCA(spd_897, verbose = FALSE)
+spd_897 <- FindNeighbors(spd_897, dims=1:10)
+spd_897 <- FindClusters(spd_897,resolution = 0.5)
+spd_897 <- RunUMAP(spd_897, reduction = "pca", dims = 1:10)
+
+p1 <- DimPlot(spd_897, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(spd_897, label = TRUE, label.size = 3)
+p1 + p2
+ggsave("sample897_umap_spatial_precogaps_20231215.pdf")
+
+spd_899 <- NormalizeData(spd_899)
+spd_899=FindVariableFeatures(spd_899)
+all.genes <- rownames(spd_899)
+spd_899 <- ScaleData(spd_899, features = all.genes)
+spd_899 <- RunPCA(spd_899, verbose = FALSE)
+spd_899 <- FindNeighbors(spd_899, dims=1:10)
+spd_899 <- FindClusters(spd_899,resolution = 0.5)
+spd_899 <- RunUMAP(spd_899, reduction = "pca", dims = 1:10)
+
+p1 <- DimPlot(spd_899, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(spd_899, label = TRUE, label.size = 3)
+p1 + p2
+ggsave("sample899_umap_spatial_precogaps_20231215.pdf")
+
+p2 <- SpatialDimPlot(spd_899, label = FALSE,image.alpha=0)
+p2
+ggsave("sample899_umap_spatial_precogaps_update_nolabels_nocore_20240314.pdf")
+
+plot1 <- VlnPlot(spd_897, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("897 feature count")
+# plotting spatial distribution of nCount in the sample
+plot2 <- SpatialFeaturePlot(spd_897, features = "nCount_Spatial") +
+  theme(legend.position = "right") + ggtitle("897 spatial features")
+plot1+plot2
+ggsave("sample897_counts_subsetResults_precogaps_20231215.pdf")
+
+plot3 <- VlnPlot(spd_899, features = "nCount_Spatial", pt.size = 0.1) + ggtitle("899 feature count")
+plot4 <- SpatialFeaturePlot(spd_899, features = "nCount_Spatial") + theme(legend.position = "right") + ggtitle("899 spatial features")
+plot3+plot4
+ggsave("sample899_counts_subsetResults_precogaps_20231215.pdf")
+
+save(spd_897,spd_899,file="Sobjects.rda")
+```

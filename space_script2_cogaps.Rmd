@@ -1,0 +1,45 @@
+---
+title: "spaceloading"
+author: "Jeanette Johnson and Michael Considine"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+
+```
+
+# We run CoGAPS on the two distinct datasets after filtering out the necrotic cores.
+
+```{r cogaps}
+load("logCounts_Updated_20231218.rda")
+library(CoGAPS)
+# create new parameters object
+params <- new("CogapsParams")
+
+# view all parameters
+params
+
+# get the value for a specific parameter
+getParam(params, "nPatterns")
+
+# set the value for a specific parameter
+params <- setParam(params, "nPatterns", 4)
+getParam(params, "nPatterns")
+
+
+cogapsresult897 <- CoGAPS(t(spd_897counts), params, sparseOptimization=TRUE,distributed="genome-wide",seed=42)
+saveRDS(cogapsresult897, "cogapsresult897v4.Rds")
+
+cogapsresult899 <- CoGAPS(t(spd_899counts), params, sparseOptimization=TRUE,distributed="genome-wide",seed=42)
+saveRDS(cogapsresult899, "cogapsresult899v4.Rds")
+
+```
+
+
