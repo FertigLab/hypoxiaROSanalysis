@@ -344,7 +344,7 @@ plotEnrichment(geneSetsAll$ch[[i]],
 
 GSEA.barplot(spd899_c10contrast_fgseaRes, category = 'pathway', score = 'NES',
              pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c10contrast_fgseaRes),title="Cluster10_899_pairwise")
-ggsave("Cluster10_FGSEA_Hallmarks_899_final_barplot.pdf")
+ggsave("Cluster10_FGSEA_Hallmarks_899_final_barplot_pairwise.pdf")
 
 
 plotEnrichment(geneSetsAll$ch[[i]],
@@ -354,7 +354,7 @@ plotEnrichment(geneSetsAll$ch[[i]],
 
 GSEA.barplot(spd899_c21contrast_fgseaRes, category = 'pathway', score = 'NES',
              pvalue = 'pval', sort = 'NES', decreasing = TRUE,top=nrow(spd899_c21contrast_fgseaRes),title="Cluster21_899_pairwise")
-ggsave("Cluster2_FGSEA_Hallmarks_899_final_barplot.pdf")
+ggsave("Cluster21_FGSEA_Hallmarks_899_final_barplot_pairwise.pdf")
 
 
 plotEnrichment(geneSetsAll$ch[[i]],
